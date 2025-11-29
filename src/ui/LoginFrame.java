@@ -8,164 +8,269 @@ import model.Teacher;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.Optional;
+
+// ----------------------------
+// CUSTOM BACKGROUND PANEL
+// ----------------------------
+class BackgroundPanel extends JPanel {
+    private Image backgroundImage;
+
+    public BackgroundPanel(String imagePath) {
+        try {
+            backgroundImage = new ImageIcon(getClass().getResource(imagePath)).getImage();
+        } catch (Exception e) {
+            System.err.println("Background image not found: " + imagePath);
+        }
+        setLayout(new GridBagLayout()); 
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        if (backgroundImage != null) {
+            g.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), this);
+        }
+    }
+}
 
 public class LoginFrame extends JFrame {
 
     private AuthService auth;
     private TeacherRepository teacherRepo; 
     private StudentRepository studentRepo; 
-    private AttendanceRepository attendanceRepo; 
+    private AttendanceRepository attendanceRepo;
 
     private JTextField ownerUserField;
     private JPasswordField ownerPassField;
     private JTextField teacherUserField;
     private JPasswordField teacherPassField;
 
-    // Constructor MUST accept three repositories
-    public LoginFrame(TeacherRepository teacherRepo, StudentRepository studentRepo, AttendanceRepository attendanceRepo){ 
+    // Custom Tab Buttons
+    private JButton btnOwnerTab;
+    private JButton btnTeacherTab;
+    private JPanel cardPanel;
+    private CardLayout cardLayout;
+
+    // Colors
+    private final Color ACTIVE_TAB_COLOR = new Color(41, 128, 185); // Blue
+    private final Color INACTIVE_TAB_COLOR = new Color(240, 240, 240); // Light Grey
+    private final Color ACTIVE_TEXT_COLOR = Color.WHITE;
+    private final Color INACTIVE_TEXT_COLOR = Color.GRAY;
+
+    public LoginFrame(TeacherRepository teacherRepo, StudentRepository studentRepo, AttendanceRepository attendanceRepo){
         this.teacherRepo = teacherRepo;
         this.studentRepo = studentRepo;
         this.attendanceRepo = attendanceRepo;
-        
+
         this.auth = new AuthService(teacherRepo, studentRepo); 
         
-        setNimbusLookAndFeel(); // Re-included here for guaranteed load
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {}
+
         init();
     }
 
-    // Re-integrated the L&F setting method
-    private void setNimbusLookAndFeel() {
-        try {
-            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Fallback: If Nimbus fails, the default system L&F will be used.
-        }
-    }
-
     private void init() {
-        setTitle("Attendance Management System - Login");
-        setSize(700, 500); // Slightly larger for the "fuller" look
+        setTitle("Attendance Management System");
+        setSize(900, 600); 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null); 
-        
-        // --- 1. Main Background Panel (The dark/colorful background) ---
-        JPanel mainPanel = new JPanel(new GridBagLayout()); // Use GridBagLayout to center content
-        mainPanel.setBackground(new Color(45, 60, 80)); // Deep dark blue/gray background
-        
-        // --- 2. Floating Login Card (The white, centered element) ---
-        JPanel loginCard = new JPanel(new BorderLayout());
-        loginCard.setPreferredSize(new Dimension(550, 400)); // Fixed size for the central card
-        loginCard.setBackground(Color.WHITE);
-        loginCard.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200), 1)); // Light border
+        setLocationRelativeTo(null);
 
-        // 2a. Header inside the card
-        JPanel cardHeader = new JPanel();
-        cardHeader.setBackground(new Color(60, 140, 220)); 
-        cardHeader.setPreferredSize(new Dimension(550, 60));
-        JLabel titleLabel = new JLabel("Attendance System Login");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 24));
-        titleLabel.setForeground(Color.WHITE);
-        cardHeader.add(titleLabel);
-        loginCard.add(cardHeader, BorderLayout.NORTH);
+        // 1. Background
+        BackgroundPanel bgPanel = new BackgroundPanel("/ui/images/login_bg.jpg");
         
-        // 2b. Tabbed Content
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.setFont(new Font("Arial", Font.BOLD, 14)); 
-        tabs.setBorder(new EmptyBorder(10, 10, 10, 10)); // Inner padding
-        tabs.setBackground(Color.WHITE);
+        // 2. Main Login Box (FIXED GHOSTING ISSUE)
+        JPanel loginBox = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                // Manually paint the semi-transparent background
+                g.setColor(getBackground());
+                g.fillRect(0, 0, getWidth(), getHeight());
+                super.paintComponent(g);
+            }
+        };
+        // Important: Set Opaque to FALSE so it repaints the background image underneath first
+        loginBox.setOpaque(false); 
+        loginBox.setBackground(new Color(255, 255, 255, 230)); // Semi-transparent white
+        
+        loginBox.setBorder(new EmptyBorder(0, 0, 0, 0)); 
+        loginBox.setPreferredSize(new Dimension(450, 500)); 
 
-        tabs.addTab("Owner Login", createLoginTabPanel(true));
-        tabs.addTab("Teacher Login", createLoginTabPanel(false));
+        // --- A. TOP TOGGLE TABS ---
+        JPanel togglePanel = new JPanel(new GridLayout(1, 2));
+        togglePanel.setPreferredSize(new Dimension(450, 50));
+        togglePanel.setOpaque(false); // Ensure this is also transparent-safe
         
-        loginCard.add(tabs, BorderLayout.CENTER);
+        btnOwnerTab = createTabButton("Owner Login", true);
+        btnTeacherTab = createTabButton("Teacher Login", false);
         
-        // Add the centered card to the main background panel
-        mainPanel.add(loginCard);
+        // Switch Logic
+        btnOwnerTab.addActionListener(e -> {
+            cardLayout.show(cardPanel, "OWNER");
+            updateTabStyles(true);
+        });
         
-        setContentPane(mainPanel); 
+        btnTeacherTab.addActionListener(e -> {
+            cardLayout.show(cardPanel, "TEACHER");
+            updateTabStyles(false);
+        });
+        
+        togglePanel.add(btnOwnerTab);
+        togglePanel.add(btnTeacherTab);
+        
+        loginBox.add(togglePanel, BorderLayout.NORTH);
+
+        // --- B. FORMS AREA (CardLayout) ---
+        cardLayout = new CardLayout();
+        cardPanel = new JPanel(cardLayout);
+        cardPanel.setOpaque(false); // Important
+        cardPanel.setBorder(new EmptyBorder(20, 40, 30, 40)); 
+        
+        cardPanel.add(createFormPanel(true), "OWNER");
+        cardPanel.add(createFormPanel(false), "TEACHER");
+        
+        loginBox.add(cardPanel, BorderLayout.CENTER);
+
+        // Add login box to background
+        bgPanel.add(loginBox);
+        setContentPane(bgPanel);
+    }
+    
+    // --- Helper to Create Tab Buttons ---
+    private JButton createTabButton(String text, boolean isActive) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        if (isActive) {
+            btn.setBackground(ACTIVE_TAB_COLOR);
+            btn.setForeground(ACTIVE_TEXT_COLOR);
+        } else {
+            btn.setBackground(INACTIVE_TAB_COLOR);
+            btn.setForeground(INACTIVE_TEXT_COLOR);
+        }
+        return btn;
+    }
+    
+    // --- Helper to Switch Styles ---
+    private void updateTabStyles(boolean isOwnerActive) {
+        if (isOwnerActive) {
+            btnOwnerTab.setBackground(ACTIVE_TAB_COLOR);
+            btnOwnerTab.setForeground(ACTIVE_TEXT_COLOR);
+            btnTeacherTab.setBackground(INACTIVE_TAB_COLOR);
+            btnTeacherTab.setForeground(INACTIVE_TEXT_COLOR);
+        } else {
+            btnOwnerTab.setBackground(INACTIVE_TAB_COLOR);
+            btnOwnerTab.setForeground(INACTIVE_TEXT_COLOR);
+            btnTeacherTab.setBackground(ACTIVE_TAB_COLOR);
+            btnTeacherTab.setForeground(ACTIVE_TEXT_COLOR);
+        }
     }
 
-    private JPanel createLoginTabPanel(boolean isOwner) {
+    private JPanel createFormPanel(boolean isOwner) {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE); // Ensure tab content is white
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20)); 
-
+        panel.setOpaque(false); 
+        
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10); 
+        gbc.insets = new Insets(10, 0, 10, 0); 
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        
-        JLabel usernameLabel = new JLabel(isOwner ? "Owner Username:" : "Teacher Username:");
-        JLabel passwordLabel = new JLabel(isOwner ? "Owner Password:" : "Teacher Password:");
-        
-        usernameLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-        passwordLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        gbc.weightx = 1.0;
 
-        JTextField currentUserField = new JTextField(20);
-        JPasswordField currentPassField = new JPasswordField(20);
+        // Header
+        JLabel welcomeLabel = new JLabel(isOwner ? "Welcome Back, Owner" : "Welcome Back, Teacher");
+        welcomeLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        welcomeLabel.setForeground(new Color(50, 50, 50));
+        welcomeLabel.setHorizontalAlignment(SwingConstants.CENTER);
         
-        currentUserField.setPreferredSize(new Dimension(200, 30));
-        currentPassField.setPreferredSize(new Dimension(200, 30));
+        gbc.gridx = 0; gbc.gridy = 0; 
+        gbc.insets = new Insets(0, 0, 20, 0); 
+        panel.add(welcomeLabel, gbc);
+
+        // Inputs
+        Font labelFont = new Font("Segoe UI", Font.BOLD, 14);
+        Font fieldFont = new Font("Segoe UI", Font.PLAIN, 15);
+
+        JLabel userLabel = new JLabel("Username");
+        userLabel.setFont(labelFont);
+        userLabel.setForeground(Color.DARK_GRAY);
         
+        JTextField userField = new JTextField(15);
+        userField.setFont(fieldFont);
+        userField.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(200, 200, 200)), 
+                new EmptyBorder(10, 10, 10, 10))); 
+
+        JLabel passLabel = new JLabel("Password");
+        passLabel.setFont(labelFont);
+        passLabel.setForeground(Color.DARK_GRAY);
+        
+        JPasswordField passField = new JPasswordField(15);
+        passField.setFont(fieldFont);
+        passField.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(200, 200, 200)), 
+                new EmptyBorder(10, 10, 10, 10)));
+
         if (isOwner) {
-            ownerUserField = currentUserField;
-            ownerPassField = currentPassField;
+            ownerUserField = userField;
+            ownerPassField = passField;
         } else {
-            teacherUserField = currentUserField;
-            teacherPassField = currentPassField;
+            teacherUserField = userField;
+            teacherPassField = passField;
         }
-        
-        // Layout
-        addRowToPanel(panel, gbc, 0, usernameLabel, currentUserField);
-        addRowToPanel(panel, gbc, 1, passwordLabel, currentPassField);
+
+        // Add Components
+        gbc.insets = new Insets(5, 0, 5, 0);
+        gbc.gridy = 1; panel.add(userLabel, gbc);
+        gbc.gridy = 2; panel.add(userField, gbc);
+        gbc.gridy = 3; panel.add(passLabel, gbc);
+        gbc.gridy = 4; panel.add(passField, gbc);
 
         // Login Button
-        JButton loginButton = new JButton("Login");
-        loginButton.setFont(new Font("Arial", Font.BOLD, 16));
-        loginButton.setBackground(new Color(70, 180, 70)); 
+        JButton loginButton = new JButton("Login to System");
+        loginButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        loginButton.setBackground(new Color(30, 144, 255)); 
         loginButton.setForeground(Color.WHITE);
-        loginButton.setFocusPainted(false); 
-        loginButton.setPreferredSize(new Dimension(150, 40)); 
+        loginButton.setFocusPainted(false);
+        loginButton.setBorder(new EmptyBorder(12, 0, 12, 0));
+        loginButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
-        // Action Listener (Logic remains the same)
+        // Hover effect
+        loginButton.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { loginButton.setBackground(new Color(20, 120, 240)); }
+            public void mouseExited(MouseEvent e) { loginButton.setBackground(new Color(30, 144, 255)); }
+        });
+
         loginButton.addActionListener(e -> {
             if (isOwner) {
                 if(auth.ownerLogin(ownerUserField.getText(), new String(ownerPassField.getPassword()))){
-                    new OwnerDashboardFrame(teacherRepo, studentRepo, attendanceRepo).setVisible(true); 
+                    new OwnerDashboardFrame(teacherRepo, studentRepo, attendanceRepo).setVisible(true);
                     dispose();
                 } else {
-                    JOptionPane.showMessageDialog(this,"Invalid owner login", "Login Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this,"Invalid owner credentials", "Access Denied", JOptionPane.ERROR_MESSAGE);
                 }
             } else {
                 Optional<Teacher> ot = auth.teacherLogin(teacherUserField.getText(), new String(teacherPassField.getPassword()));
                 if(ot.isPresent()){
-                    new TeacherDashboardFrame(ot.get(), studentRepo, attendanceRepo).setVisible(true); 
+                    new TeacherDashboardFrame(ot.get(), studentRepo, attendanceRepo).setVisible(true);
                     dispose();
                 } else {
-                    JOptionPane.showMessageDialog(this,"Invalid teacher login", "Login Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this,"Invalid teacher credentials", "Access Denied", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
 
-        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER;
-        gbc.insets = new Insets(30, 10, 10, 10); 
+        gbc.gridy = 5; 
+        gbc.insets = new Insets(30, 0, 10, 0); 
         panel.add(loginButton, gbc);
 
         return panel;
-    }
-    
-    // Helper method for clean GridBagLayout setup
-    private void addRowToPanel(JPanel panel, GridBagConstraints gbc, int row, JLabel label, JComponent component) {
-        gbc.gridx = 0; gbc.gridy = row; gbc.anchor = GridBagConstraints.EAST; 
-        panel.add(label, gbc);
-        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1.0; gbc.anchor = GridBagConstraints.WEST; 
-        panel.add(component, gbc);
     }
 }

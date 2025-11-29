@@ -1,177 +1,148 @@
 package ui;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import repository.TeacherRepository;
 import repository.StudentRepository;
 import repository.AttendanceRepository;
+import service.AuthService;
 import model.Teacher;
 import model.Student;
 
 public class OwnerDashboardFrame extends JFrame {
     
-    // Repositories
+    // --- MODERN COLORS ---
+    private static final Color HEADER_BG = new Color(41, 128, 185); // Modern Blue
+    private static final Color SIDEBAR_BG = new Color(44, 62, 80); // Dark Blue-Grey
+    private static final Color MAIN_BG = new Color(236, 240, 241); // Clean Grey
+    
+    // Button Colors
+    private static final Color BTN_GREEN = new Color(39, 174, 96);
+    private static final Color BTN_BLUE = new Color(41, 128, 185);
+    private static final Color BTN_RED = new Color(231, 76, 60);
+
     private TeacherRepository teacherRepo; 
     private StudentRepository studentRepo; 
     private AttendanceRepository attendanceRepo; 
-
-    // UI Components for Table Data
+    
+    private JPanel sideMenuPanel;
+    private JPanel contentPanel;
+    private CardLayout cardLayout;
+    
     private JTable teacherTable; 
     private JTable studentTable; 
     private DefaultTableModel teacherTableModel; 
     private DefaultTableModel studentTableModel; 
 
-    // UI Components for Navigation (NEW)
-    private JPanel sideMenuPanel;
-    private JPanel mainContentPanel;
-    private CardLayout cardLayout; // To switch views easily
-    private JButton menuToggleBtn;
-
-    // Card identifiers
-    private static final String TEACHER_CARD = "TeacherManagement";
-    private static final String STUDENT_CARD = "StudentManagement";
-    private static final String SETTINGS_CARD = "SystemSettings";
-
-
-    // Constructor accepts all three repositories
     public OwnerDashboardFrame(TeacherRepository teacherRepo, StudentRepository studentRepo, AttendanceRepository attendanceRepo){ 
         this.teacherRepo = teacherRepo;
         this.studentRepo = studentRepo; 
         this.attendanceRepo = attendanceRepo;
         
         setTitle("Owner Dashboard - System Administration");
-        setSize(1200, 800); 
+        setSize(1000, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
         initUI();
-        
-        // Load data initially
-        loadTeacherData(); 
-        loadStudentData();
     }
     
     private void initUI() {
-        // Use BorderLayout for Header (NORTH), Sidebar (WEST), and Content (CENTER)
         setLayout(new BorderLayout()); 
-        
-        // 1. Header Panel (NORTH)
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(60, 140, 220)); 
-        headerPanel.setPreferredSize(new Dimension(getWidth(), 70));
-        
-        // Hamburger Menu Button (Left side of Header)
-        menuToggleBtn = new JButton("☰ Menu");
-        menuToggleBtn.setFont(new Font("SansSerif", Font.BOLD, 18));
-        menuToggleBtn.setForeground(Color.WHITE);
-        menuToggleBtn.setBackground(new Color(60, 140, 220));
-        menuToggleBtn.setBorderPainted(false);
-        menuToggleBtn.setFocusPainted(false);
-        menuToggleBtn.addActionListener(e -> handleSidebarToggle());
-        
-        JPanel menuWrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 15));
-        menuWrapper.setBackground(new Color(60, 140, 220));
-        menuWrapper.add(menuToggleBtn);
-        headerPanel.add(menuWrapper, BorderLayout.WEST);
 
-        // Title Label (Center of Header)
-        JLabel titleLabel = new JLabel("System Administration Panel", SwingConstants.CENTER);
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 32));
+        // 1. TOP HEADER
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(HEADER_BG);
+        headerPanel.setPreferredSize(new Dimension(getWidth(), 60));
+        headerPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
+
+        // Hamburger Button
+        JButton menuBtn = new JButton("\u2630"); 
+        styleIconButton(menuBtn, HEADER_BG); // Style as Icon
+        
+        menuBtn.addActionListener(e -> {
+            boolean visible = sideMenuPanel.isVisible();
+            sideMenuPanel.setVisible(!visible);
+        });
+
+        JLabel titleLabel = new JLabel("  System Administration");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(Color.WHITE);
-        headerPanel.add(titleLabel, BorderLayout.CENTER);
+        
+        JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        leftHeader.setOpaque(false);
+        leftHeader.add(menuBtn);
+        leftHeader.add(titleLabel);
+        
+        // --- MODERN LOGOUT BUTTON ---
+        JButton logoutBtn = new JButton("Logout");
+        styleButton(logoutBtn, BTN_RED); // Flat Red Button
+        logoutBtn.setPreferredSize(new Dimension(100, 35));
+        
+        logoutBtn.addActionListener(e -> {
+            new LoginFrame(teacherRepo, studentRepo, attendanceRepo).setVisible(true);
+            dispose();
+        });
+
+        headerPanel.add(leftHeader, BorderLayout.WEST);
+        headerPanel.add(logoutBtn, BorderLayout.EAST);
         
         add(headerPanel, BorderLayout.NORTH);
 
-        // 2. Sidebar Panel (WEST)
-        sideMenuPanel = createSidebar();
+        // 2. SIDE MENU
+        sideMenuPanel = new JPanel();
+        sideMenuPanel.setLayout(new BoxLayout(sideMenuPanel, BoxLayout.Y_AXIS));
+        sideMenuPanel.setBackground(SIDEBAR_BG); 
+        sideMenuPanel.setPreferredSize(new Dimension(240, getHeight()));
+        sideMenuPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
+        
+        addMenuButton("Teacher Management", "TEACHERS");
+        addMenuButton("Student Management", "STUDENTS");
+        addMenuButton("System Settings", "SETTINGS");
+        
         add(sideMenuPanel, BorderLayout.WEST);
 
-        // 3. Main Content Area (CENTER)
+        // 3. MAIN CONTENT
         cardLayout = new CardLayout();
-        mainContentPanel = new JPanel(cardLayout);
-        mainContentPanel.setBackground(Color.WHITE);
-
-        // Add initial content cards
-        mainContentPanel.add(createTeacherManagementPanel(), TEACHER_CARD);
-        mainContentPanel.add(createStudentManagementPanel(), STUDENT_CARD);
-        mainContentPanel.add(createSettingsPanel(), SETTINGS_CARD);
+        contentPanel = new JPanel(cardLayout);
+        contentPanel.setBackground(MAIN_BG);
         
-        add(mainContentPanel, BorderLayout.CENTER);
+        contentPanel.add(createTeacherManagementPanel(), "TEACHERS");
+        contentPanel.add(createStudentManagementPanel(), "STUDENTS");
+        contentPanel.add(createSettingsPanel(), "SETTINGS");
         
-        // Show Teacher Management by default
-        cardLayout.show(mainContentPanel, TEACHER_CARD);
-
-
-        // 4. Footer Panel (SOUTH) - Remains the same
-        JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
-        footerPanel.setBackground(new Color(45, 60,  80));
-        footerPanel.setPreferredSize(new Dimension(getWidth(), 40));
-
-        JLabel statusLabel = new JLabel("System Status: Active");
-        statusLabel.setForeground(new Color(102, 255, 102));
+        add(contentPanel, BorderLayout.CENTER);
+    }
+    
+    // --- Helper for Side Menu Buttons ---
+    private void addMenuButton(String text, String cardName) {
+        JButton btn = new JButton(text);
+        btn.setMaximumSize(new Dimension(240, 50));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        btn.setForeground(Color.WHITE);
+        btn.setBackground(SIDEBAR_BG);
+        btn.setUI(new javax.swing.plaf.basic.BasicButtonUI()); // Force Flat
+        btn.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20));
+        btn.setFocusPainted(false);
+        btn.setHorizontalAlignment(SwingConstants.LEFT);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
-        JButton logoutBtn = new JButton("Logout");
-        logoutBtn.setBackground(new Color(255, 69, 0)); 
-        logoutBtn.setForeground(Color.WHITE);
-        logoutBtn.setFont(new Font("SansSerif", Font.BOLD, 14));
-        
-        logoutBtn.addActionListener(e -> {
-            new LoginFrame(teacherRepo, studentRepo, attendanceRepo).setVisible(true); 
-            dispose();
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(52, 73, 94)); // Lighter on hover
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(SIDEBAR_BG);
+            }
         });
-        
-        footerPanel.add(statusLabel);
-        footerPanel.add(logoutBtn);
-        add(footerPanel, BorderLayout.SOUTH);
-    }
-    
-    // --- NEW: Method to create the Sidebar ---
-    private JPanel createSidebar() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(new Color(50, 70, 90)); // Dark sidebar background
-        panel.setPreferredSize(new Dimension(220, getHeight()));
-        
-        addSidebarButton(panel, "👨‍🏫 Teacher Management", TEACHER_CARD);
-        addSidebarButton(panel, "🎓 Student Management", STUDENT_CARD);
-        
-        panel.add(Box.createVerticalStrut(20)); // Separator space
-        
-        addSidebarButton(panel, "⚙️ System Settings", SETTINGS_CARD);
-        
-        return panel;
-    }
-    
-    // --- NEW: Helper method to create and add menu buttons ---
-    private void addSidebarButton(JPanel parent, String text, String cardName) {
-        JButton button = new JButton(text);
-        button.setAlignmentX(Component.LEFT_ALIGNMENT);
-        button.setMaximumSize(new Dimension(200, 45));
-        button.setFont(new Font("SansSerif", Font.BOLD, 16));
-        button.setBackground(new Color(50, 70, 90));
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15)); // Padding
-        
-        button.addActionListener(e -> {
-            cardLayout.show(mainContentPanel, cardName); // Switch view
-            // Optional: You could hide the sidebar after selection here
-        });
-        
-        parent.add(button);
-        parent.add(Box.createVerticalStrut(5)); // Small spacing between buttons
-    }
 
-    // --- NEW: Method to handle sidebar visibility toggle ---
-    private void handleSidebarToggle() {
-        // Toggle the visibility and revalidate the layout
-        sideMenuPanel.setVisible(!sideMenuPanel.isVisible());
-        revalidate(); 
-        repaint();
+        btn.addActionListener(e -> cardLayout.show(contentPanel, cardName));
+        sideMenuPanel.add(btn);
     }
     
-    // --- Data Loading Methods (Keep as is) ---
+    // --- Teacher Panel ---
     public void loadTeacherData() {
         if (teacherTableModel == null) return;
         teacherTableModel.setRowCount(0); 
@@ -180,23 +151,14 @@ public class OwnerDashboardFrame extends JFrame {
         }
     }
     
-    public void loadStudentData() {
-        if (studentTableModel == null) return;
-        studentTableModel.setRowCount(0); 
-        for (Student s : studentRepo.getAll()) {
-            studentTableModel.addRow(new Object[]{s.getId(), s.getName(), s.getSubject()}); 
-        }
-    }
-
-    // --- Content Panel Creation Methods (Keep internal structure) ---
-    // Note: These methods are now added as 'cards' to the mainContentPanel.
     private JPanel createTeacherManagementPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        // ... (Keep the existing implementation for Teacher Management table and buttons)
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
+        panel.setBackground(MAIN_BG);
 
-        JLabel header = new JLabel("Manage Teacher Accounts", SwingConstants.CENTER);
-        header.setFont(new Font("SansSerif", Font.BOLD, 20));
+        JLabel header = new JLabel("Manage Teacher Accounts");
+        header.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        header.setForeground(SIDEBAR_BG);
         panel.add(header, BorderLayout.NORTH);
 
         String[] columns = {"Username", "Password", "Subject"};
@@ -205,47 +167,48 @@ public class OwnerDashboardFrame extends JFrame {
             public boolean isCellEditable(int row, int column) { return false; }
         };
         teacherTable = new JTable(teacherTableModel);
-        teacherTable.setRowHeight(28);
+        setupTable(teacherTable); // Apply table styling
         
-        JScrollPane scrollPane = new JScrollPane(teacherTable);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        panel.add(new JScrollPane(teacherTable), BorderLayout.CENTER);
 
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 30, 10));
+        // --- BUTTONS ---
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
+        btnPanel.setBackground(MAIN_BG);
+        
         JButton addBtn = new JButton("Add New Teacher");
         JButton editBtn = new JButton("Edit Selected");
         JButton deleteBtn = new JButton("Delete Selected");
         
-        // Set button styles
-        addBtn.setBackground(new Color(60, 179, 113));
-        addBtn.setForeground(Color.WHITE);
-        editBtn.setBackground(new Color(255, 165, 0));
-        editBtn.setForeground(Color.WHITE);
-        deleteBtn.setBackground(new Color(220, 20, 60));
-        deleteBtn.setForeground(Color.WHITE);
+        // Apply Modern Styling
+        styleButton(addBtn, BTN_GREEN);
+        styleButton(editBtn, BTN_BLUE);
+        styleButton(deleteBtn, BTN_RED);
+
+        addBtn.addActionListener(e -> new TeacherFormDialog(this, teacherRepo, null).setVisible(true));
         
-        // Action Listeners 
-        addBtn.addActionListener(e -> { new TeacherFormDialog(this, teacherRepo, null).setVisible(true); });
         editBtn.addActionListener(e -> {
             int selectedRow = teacherTable.getSelectedRow();
             if (selectedRow != -1) {
                 String u = (String) teacherTable.getValueAt(selectedRow, 0);
                 String p = (String) teacherTable.getValueAt(selectedRow, 1);
                 String s = (String) teacherTable.getValueAt(selectedRow, 2);
-                Teacher teacherToEdit = new Teacher(u, p, s);
-                new TeacherFormDialog(this, teacherRepo, teacherToEdit).setVisible(true);
-            } else { JOptionPane.showMessageDialog(this, "Please select a teacher to edit.", "Selection Error", JOptionPane.WARNING_MESSAGE); }
+                new TeacherFormDialog(this, teacherRepo, new Teacher(u, p, s)).setVisible(true);
+            } else {
+                JOptionPane.showMessageDialog(this, "Select a teacher to edit.");
+            }
         });
+        
         deleteBtn.addActionListener(e -> {
             int selectedRow = teacherTable.getSelectedRow();
             if (selectedRow != -1) {
                 String username = (String) teacherTable.getValueAt(selectedRow, 0);
-                int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete teacher: " + username + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
-                if (confirm == JOptionPane.YES_OPTION) {
+                if (JOptionPane.showConfirmDialog(this, "Delete " + username + "?", "Confirm", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                     teacherRepo.deleteTeacher(username);
-                    JOptionPane.showMessageDialog(this, "Teacher " + username + " deleted successfully.");
                     loadTeacherData(); 
                 }
-            } else { JOptionPane.showMessageDialog(this, "Please select a teacher to delete.", "Selection Error", JOptionPane.WARNING_MESSAGE); }
+            } else {
+                JOptionPane.showMessageDialog(this, "Select a teacher to delete.");
+            }
         });
         
         btnPanel.add(addBtn);
@@ -253,16 +216,27 @@ public class OwnerDashboardFrame extends JFrame {
         btnPanel.add(deleteBtn);
         panel.add(btnPanel, BorderLayout.SOUTH);
 
+        loadTeacherData(); 
         return panel;
+    }
+
+    // --- Student Panel ---
+    public void loadStudentData() {
+        if (studentTableModel == null) return;
+        studentTableModel.setRowCount(0); 
+        for (Student s : studentRepo.getAll()) {
+            studentTableModel.addRow(new Object[]{s.getId(), s.getName(), s.getSubject()}); 
+        }
     }
 
     private JPanel createStudentManagementPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        // ... (Keep the existing implementation for Student Management table and buttons)
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
+        panel.setBackground(MAIN_BG);
 
-        JLabel header = new JLabel("Manage Student Records", SwingConstants.CENTER);
-        header.setFont(new Font("SansSerif", Font.BOLD, 20));
+        JLabel header = new JLabel("Manage Student Records");
+        header.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        header.setForeground(SIDEBAR_BG);
         panel.add(header, BorderLayout.NORTH);
 
         String[] columns = {"ID", "Name", "Subject/Class"};
@@ -271,48 +245,50 @@ public class OwnerDashboardFrame extends JFrame {
             public boolean isCellEditable(int row, int column) { return false; }
         };
         studentTable = new JTable(studentTableModel);
-        studentTable.setRowHeight(28);
+        setupTable(studentTable);
+        
         panel.add(new JScrollPane(studentTable), BorderLayout.CENTER);
 
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 30, 10));
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
+        btnPanel.setBackground(MAIN_BG);
+        
         JButton addBtn = new JButton("Add New Student");
         JButton editBtn = new JButton("Edit Selected");
         JButton deleteBtn = new JButton("Delete Selected");
         
-        // Set button styles
-        addBtn.setBackground(new Color(60, 179, 113));
-        addBtn.setForeground(Color.WHITE);
-        editBtn.setBackground(new Color(255, 165, 0));
-        editBtn.setForeground(Color.WHITE);
-        deleteBtn.setBackground(new Color(220, 20, 60));
-        deleteBtn.setForeground(Color.WHITE);
+        styleButton(addBtn, BTN_GREEN);
+        styleButton(editBtn, BTN_BLUE);
+        styleButton(deleteBtn, BTN_RED);
         
-        // Action Listeners 
-        addBtn.addActionListener(e -> { new StudentFormDialog(this, studentRepo, null).setVisible(true); loadStudentData(); });
+        addBtn.addActionListener(e -> {
+            new StudentFormDialog(this, studentRepo, null).setVisible(true); 
+            loadStudentData(); 
+        });
+        
         editBtn.addActionListener(e -> {
             int selectedRow = studentTable.getSelectedRow();
             if (selectedRow != -1) {
                 String id = (String) studentTable.getValueAt(selectedRow, 0);
                 String name = (String) studentTable.getValueAt(selectedRow, 1);
                 String subject = (String) studentTable.getValueAt(selectedRow, 2);
-                
-                Student studentToEdit = new Student(id, name, subject);
-                new StudentFormDialog(this, studentRepo, studentToEdit).setVisible(true);
+                new StudentFormDialog(this, studentRepo, new Student(id, name, subject)).setVisible(true);
                 loadStudentData(); 
-            } else { JOptionPane.showMessageDialog(this, "Please select a student to edit.", "Selection Error", JOptionPane.WARNING_MESSAGE); }
+            } else {
+                JOptionPane.showMessageDialog(this, "Select a student to edit.");
+            }
         });
+        
         deleteBtn.addActionListener(e -> {
             int selectedRow = studentTable.getSelectedRow();
             if (selectedRow != -1) {
                 String id = (String) studentTable.getValueAt(selectedRow, 0);
-                int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete student ID: " + id + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
-                
-                if (confirm == JOptionPane.YES_OPTION) {
+                if (JOptionPane.showConfirmDialog(this, "Delete Student " + id + "?", "Confirm", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                     studentRepo.deleteStudent(id);
-                    JOptionPane.showMessageDialog(this, "Student ID " + id + " deleted successfully.");
                     loadStudentData(); 
                 }
-            } else { JOptionPane.showMessageDialog(this, "Please select a student to delete.", "Selection Error", JOptionPane.WARNING_MESSAGE); }
+            } else {
+                JOptionPane.showMessageDialog(this, "Select a student to delete.");
+            }
         });
         
         btnPanel.add(addBtn);
@@ -320,15 +296,111 @@ public class OwnerDashboardFrame extends JFrame {
         btnPanel.add(deleteBtn);
         panel.add(btnPanel, BorderLayout.SOUTH);
 
+        loadStudentData(); 
         return panel;
     }
     
     private JPanel createSettingsPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        JLabel label = new JLabel("System Settings Area - Configurations and Backups go here.", SwingConstants.CENTER);
-        label.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        panel.add(label, BorderLayout.CENTER);
-        panel.setBorder(BorderFactory.createEmptyBorder(100, 100, 100, 100));
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(30, 60, 30, 60));
+        panel.setBackground(MAIN_BG);
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(15, 15, 15, 15);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        
+        JLabel headerLabel = new JLabel("Update Owner Credentials");
+        headerLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        headerLabel.setForeground(SIDEBAR_BG);
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER;
+        panel.add(headerLabel, gbc);
+        
+        gbc.gridy = 1; panel.add(new JSeparator(), gbc);
+        gbc.gridwidth = 1; gbc.anchor = GridBagConstraints.EAST;
+        
+        Font labelFont = new Font("Segoe UI", Font.PLAIN, 16);
+        Font fieldFont = new Font("Segoe UI", Font.PLAIN, 16);
+
+        JLabel userLabel = new JLabel("New Username:"); userLabel.setFont(labelFont);
+        JTextField userField = new JTextField(20); userField.setFont(fieldFont);
+        
+        JLabel passLabel = new JLabel("New Password:"); passLabel.setFont(labelFont);
+        JPasswordField passField = new JPasswordField(20); passField.setFont(fieldFont);
+        
+        JLabel confirmLabel = new JLabel("Confirm Password:"); confirmLabel.setFont(labelFont);
+        JPasswordField confirmField = new JPasswordField(20); confirmField.setFont(fieldFont);
+        
+        gbc.gridy = 2; gbc.gridx = 0; panel.add(userLabel, gbc);
+        gbc.gridx = 1; panel.add(userField, gbc);
+        
+        gbc.gridy = 3; gbc.gridx = 0; panel.add(passLabel, gbc);
+        gbc.gridx = 1; panel.add(passField, gbc);
+        
+        gbc.gridy = 4; gbc.gridx = 0; panel.add(confirmLabel, gbc);
+        gbc.gridx = 1; panel.add(confirmField, gbc);
+        
+        JButton updateBtn = new JButton("Update Credentials");
+        styleButton(updateBtn, BTN_BLUE);
+        updateBtn.setPreferredSize(new Dimension(200, 45));
+        
+        updateBtn.addActionListener(e -> {
+            String newUser = userField.getText().trim();
+            String newPass = new String(passField.getPassword());
+            if (newUser.isEmpty() || newPass.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Empty fields!", "Error", JOptionPane.ERROR_MESSAGE); return;
+            }
+            AuthService auth = new AuthService(teacherRepo, studentRepo);
+            auth.updateOwnerCredentials(newUser, newPass);
+            JOptionPane.showMessageDialog(this, "Credentials updated! Please login again.");
+            userField.setText(""); passField.setText(""); confirmField.setText("");
+        });
+        
+        gbc.gridy = 5; gbc.gridx = 0; gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = new Insets(25, 10, 10, 10);
+        panel.add(updateBtn, gbc);
+        
         return panel;
+    }
+
+    // --- STYLE UTILITIES ---
+    
+    // THIS IS THE KEY METHOD FOR FLAT MODERN BUTTONS
+    private void styleButton(JButton btn, Color bg) {
+        btn.setUI(new javax.swing.plaf.basic.BasicButtonUI()); // 1. Force Basic UI to remove Nimbus effects
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20)); // Flat padding
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        // Add manual hover effect
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(bg.darker());
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(bg);
+            }
+        });
+    }
+
+    private void styleIconButton(JButton btn, Color bg) {
+        btn.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("SansSerif", Font.BOLD, 24));
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+    }
+
+    private void setupTable(JTable table) {
+        table.setRowHeight(35);
+        table.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 15));
+        table.getTableHeader().setBackground(new Color(220, 220, 220));
+        table.setSelectionBackground(new Color(52, 152, 219));
+        table.setSelectionForeground(Color.WHITE);
     }
 }
