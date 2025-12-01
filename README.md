@@ -2,7 +2,7 @@
 
 -  Data will be now stored in a SQL Server instead of .ser files
 
-### **_Before you run the exe file make sure to follow below steps-_**
+### **_Before you run the main.java file make sure to follow below steps-_**
 
 1. Open Sql Server Configuration Manager
 2. Double click on Sql Server Network Configuration
