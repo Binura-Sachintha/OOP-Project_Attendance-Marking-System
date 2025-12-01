@@ -18,3 +18,8 @@ After above steps-
 - **_Open the Sql Server Management Studio and run the sql query attached_**
 
 [RUN THIS IN SQL SERVER MANAGEMENT STUDIO.sql](https://github.com/user-attachments/files/23848320/RUN.THIS.IN.SQL.SERVER.MANAGEMENT.STUDIO.sql)
+
+### **_Default Owner login credentials_**
+
+- username-owner 
+- password-123
