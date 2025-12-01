@@ -1,81 +1,98 @@
 package repository;
 
 import model.Teacher;
+import java.sql.*;
 import java.util.*;
-import java.io.*; // <--- ADD THIS IMPORT
 
 public class TeacherRepository {
-    private List<Teacher> teachers = new ArrayList<>();
-    // Define the file name where data will be saved
-    private static final String FILE_PATH = "teachers.ser"; 
 
     public TeacherRepository() {
-        loadFromFile(); // 1. Try to load existing data on startup
-
-        if (teachers.isEmpty()) {
-            // 2. If loading fails or file is empty, load dummy data
-            teachers.add(new Teacher("tom", "123", "Science"));
-            teachers.add(new Teacher("alice", "456", "Math"));
-            saveToFile(); // Save this initial data
-        }
+        // No setup needed, directly connects to DB
     }
     
-    public Optional<Teacher> find(String u){
-        return teachers.stream().filter(t->t.getUsername().equals(u)).findFirst();
+    // Find teacher by username (for Login)
+    public Optional<Teacher> find(String username){
+        String sql = "SELECT * FROM Teachers WHERE username = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, username);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                Teacher t = new Teacher(
+                    rs.getString("username"),
+                    rs.getString("password"),
+                    rs.getString("subject")
+                );
+                return Optional.of(t);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
     }
     
     public List<Teacher> getAllTeachers() {
-        return teachers;
+        List<Teacher> list = new ArrayList<>();
+        String sql = "SELECT * FROM Teachers";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            while (rs.next()) {
+                list.add(new Teacher(
+                    rs.getString("username"),
+                    rs.getString("password"),
+                    rs.getString("subject")
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
     }
     
     public void addTeacher(Teacher t) {
-        teachers.add(t);
-        saveToFile(); // <--- PERSISTENCE: Save immediately after adding
+        String sql = "INSERT INTO Teachers (username, password, subject) VALUES (?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, t.getUsername());
+            stmt.setString(2, t.getPassword());
+            stmt.setString(3, t.getSubject());
+            stmt.executeUpdate();
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
     
     public void deleteTeacher(String username) {
-        teachers.removeIf(t -> t.getUsername().equals(username));
-        saveToFile(); // <--- PERSISTENCE: Save immediately after deleting
+        String sql = "DELETE FROM Teachers WHERE username = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, username);
+            stmt.executeUpdate();
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public void editTeacher(String oldUsername, Teacher newTeacherData) {
-        for (int i = 0; i < teachers.size(); i++) {
-            if (teachers.get(i).getUsername().equals(oldUsername)) {
-                teachers.set(i, newTeacherData);
-                saveToFile(); // <--- PERSISTENCE: Save immediately after editing
-                return;
-            }
-        }
-    }
-
-    // --- Persistence Implementation using Serialization ---
-
-    @SuppressWarnings("unchecked") 
-    private void loadFromFile() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_PATH))) {
-            // Read the entire list object from the file
-            teachers = (List<Teacher>) ois.readObject();
-            System.out.println("Teachers data loaded from " + FILE_PATH);
-        } catch (FileNotFoundException e) {
-            // This is expected the first time the app runs
-            System.out.println("Teacher data file not found. Starting with default data.");
-            teachers = new ArrayList<>();
-        } catch (IOException | ClassNotFoundException e) {
-            // Catch other loading errors
+        String sql = "UPDATE Teachers SET password=?, subject=? WHERE username=?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, newTeacherData.getPassword());
+            stmt.setString(2, newTeacherData.getSubject());
+            stmt.setString(3, oldUsername);
+            stmt.executeUpdate();
+            
+        } catch (SQLException e) {
             e.printStackTrace();
-            System.err.println("Error loading teachers data. Starting fresh.");
-            teachers = new ArrayList<>(); 
-        }
-    }
-
-    public void saveToFile() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_PATH))) {
-            // Write the entire list object to the file
-            oos.writeObject(teachers);
-            System.out.println("Teachers data saved to " + FILE_PATH);
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.err.println("Error saving teachers data.");
         }
     }
 }

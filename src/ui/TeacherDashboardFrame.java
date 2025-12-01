@@ -3,7 +3,7 @@ package ui;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableRowSorter; // 1. Imported for Sorting/Filtering
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.io.*;
 import java.util.List;
@@ -44,11 +44,14 @@ public class TeacherDashboardFrame extends JFrame {
     private JTable attendanceTable; 
     private DefaultTableModel attendanceTableModel; 
     
-    // 2. Added Sorter variable to handle filtering
     private TableRowSorter<DefaultTableModel> studentSorter;
 
     private static final DecimalFormat df = new DecimalFormat("0.00"); 
     
+    // Report Input Fields
+    private JTextField startDateField;
+    private JTextField endDateField;
+
     public TeacherDashboardFrame(Teacher t, StudentRepository studentRepo, AttendanceRepository attendanceRepo){ 
         this.teacher = t;
         this.studentRepo = studentRepo;
@@ -241,13 +244,11 @@ public class TeacherDashboardFrame extends JFrame {
         new AttendanceMarkingDialog(this, students, attendanceRepo, subject).setVisible(true);
     }
 
-    // --- UPDATED: Class Management Panel with Search ---
     private JPanel createClassManagementPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
         panel.setBackground(MAIN_BG);
 
-        // 1. Top Container for Header and Search
         JPanel topContainer = new JPanel(new BorderLayout(10, 10));
         topContainer.setBackground(MAIN_BG);
         
@@ -256,7 +257,6 @@ public class TeacherDashboardFrame extends JFrame {
         header.setForeground(SIDEBAR_BG);
         topContainer.add(header, BorderLayout.NORTH);
 
-        // 2. Search Panel
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         searchPanel.setBackground(MAIN_BG);
         
@@ -273,7 +273,6 @@ public class TeacherDashboardFrame extends JFrame {
         topContainer.add(searchPanel, BorderLayout.SOUTH);
         panel.add(topContainer, BorderLayout.NORTH);
 
-        // 3. Table Setup with Sorting
         String[] columns = {"ID", "Name", "Subject/Class"};
         classManagementTableModel = new DefaultTableModel(columns, 0) { 
             @Override
@@ -282,11 +281,9 @@ public class TeacherDashboardFrame extends JFrame {
         classManagementTable = new JTable(classManagementTableModel); 
         setupTable(classManagementTable);
         
-        // ** ADDED: Table Sorter **
         studentSorter = new TableRowSorter<>(classManagementTableModel);
         classManagementTable.setRowSorter(studentSorter);
         
-        // ** ADDED: Search Logic **
         searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { filter(); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { filter(); }
@@ -296,7 +293,6 @@ public class TeacherDashboardFrame extends JFrame {
                 if (text.trim().length() == 0) {
                     studentSorter.setRowFilter(null);
                 } else {
-                    // Case-insensitive regex filter
                     studentSorter.setRowFilter(RowFilter.regexFilter("(?i)" + text));
                 }
             }
@@ -304,7 +300,6 @@ public class TeacherDashboardFrame extends JFrame {
         
         panel.add(new JScrollPane(classManagementTable), BorderLayout.CENTER);
 
-        // 4. Buttons 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 15));
         btnPanel.setBackground(MAIN_BG);
         
@@ -316,15 +311,13 @@ public class TeacherDashboardFrame extends JFrame {
         
         refreshBtn.addActionListener(e -> {
             loadClassManagementData();
-            searchField.setText(""); // Clear search on refresh
+            searchField.setText("");
         });
         
         editInfoBtn.addActionListener(e -> {
             int selectedRow = classManagementTable.getSelectedRow();
             if (selectedRow != -1) {
-                // Convert view index to model index (important when sorting/filtering!)
                 int modelRow = classManagementTable.convertRowIndexToModel(selectedRow);
-                
                 String id = (String) classManagementTableModel.getValueAt(modelRow, 0);
                 String name = (String) classManagementTableModel.getValueAt(modelRow, 1);
                 String subject = (String) classManagementTableModel.getValueAt(modelRow, 2);
@@ -344,16 +337,17 @@ public class TeacherDashboardFrame extends JFrame {
         return panel;
     }
     
+    // --- UPDATED: Reports Panel with Date Inputs ---
     private JPanel createReportsPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
         panel.setBackground(MAIN_BG);
         
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(15, 15, 15, 15);
+        gbc.insets = new Insets(10, 10, 10, 10);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         
-        JLabel header = new JLabel("Generate Attendance Reports");
+        JLabel header = new JLabel("Generate Date Range Report");
         header.setFont(new Font("Segoe UI", Font.BOLD, 24));
         header.setForeground(SIDEBAR_BG);
         header.setHorizontalAlignment(SwingConstants.CENTER);
@@ -361,34 +355,83 @@ public class TeacherDashboardFrame extends JFrame {
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
         panel.add(header, gbc);
         
-        JLabel descLabel = new JLabel("Download a summary of student attendance for your records.");
+        JLabel descLabel = new JLabel("Enter Start and End dates (YYYY-MM-DD) to download report.");
         descLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         descLabel.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridy = 1;
         panel.add(descLabel, gbc);
         
-        JButton generateBtn = new JButton("Download Full Report (.txt)");
+        // --- Date Inputs ---
+        JPanel datePanel = new JPanel(new GridLayout(2, 2, 20, 10));
+        datePanel.setBackground(MAIN_BG);
+        datePanel.setBorder(BorderFactory.createEmptyBorder(20, 0, 20, 0));
+        
+        JLabel startLabel = new JLabel("Start Date (e.g. 2023-10-01):");
+        startLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        startDateField = new JTextField(15);
+        startDateField.setText(LocalDate.now().minusMonths(1).toString()); // Default: Last month
+        startDateField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+
+        JLabel endLabel = new JLabel("End Date (e.g. 2023-10-31):");
+        endLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        endDateField = new JTextField(15);
+        endDateField.setText(LocalDate.now().toString()); // Default: Today
+        endDateField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        
+        datePanel.add(startLabel); datePanel.add(startDateField);
+        datePanel.add(endLabel); datePanel.add(endDateField);
+        
+        gbc.gridy = 2;
+        panel.add(datePanel, gbc);
+        
+        JButton generateBtn = new JButton("Download Filtered Report (.txt)");
         styleButton(generateBtn, BTN_BLUE);
-        generateBtn.setPreferredSize(new Dimension(250, 50));
+        generateBtn.setPreferredSize(new Dimension(300, 50));
         
-        generateBtn.addActionListener(e -> generateReport());
+        generateBtn.addActionListener(e -> generateDateRangeReport());
         
-        gbc.gridy = 2; gbc.insets = new Insets(40, 10, 10, 10);
+        gbc.gridy = 3; gbc.insets = new Insets(20, 10, 10, 10);
         panel.add(generateBtn, gbc);
         
         return panel;
     }
     
-    private void generateReport() {
-        List<Student> students = getStudentsForClass();
-        if (students.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No students to report on.", "Error", JOptionPane.ERROR_MESSAGE);
+    // --- UPDATED: Generate Report Logic ---
+    private void generateDateRangeReport() {
+        String startStr = startDateField.getText().trim();
+        String endStr = endDateField.getText().trim();
+        
+        LocalDate startDate, endDate;
+        
+        // 1. Validate Date Format
+        try {
+            startDate = LocalDate.parse(startStr);
+            endDate = LocalDate.parse(endStr);
+            
+            if(startDate.isAfter(endDate)) {
+                JOptionPane.showMessageDialog(this, "Start Date cannot be after End Date!", "Date Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Invalid Date Format! Use YYYY-MM-DD (e.g. 2023-10-01)", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
+        final LocalDate finalStart = startDate;
+        final LocalDate finalEnd = endDate;
+
+        // 2. Fetch Data
+        List<AttendanceRecord> records = attendanceRepo.getRecordsByDateRange(teacher.getSubject(), startDate, endDate);
+        
+        if (records.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No records found for this date range.", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 3. Save File
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Save Report As");
-        String defaultFileName = "Attendance_Report_" + teacher.getSubject() + "_" + LocalDate.now() + ".txt";
+        String defaultFileName = "Report_" + teacher.getSubject() + "_" + startStr + "_to_" + endStr + ".txt";
         fileChooser.setSelectedFile(new File(defaultFileName));
 
         int userSelection = fileChooser.showSaveDialog(this);
@@ -404,45 +447,48 @@ public class TeacherDashboardFrame extends JFrame {
 
             new Thread(() -> {
                 try (BufferedWriter writer = new BufferedWriter(new FileWriter(finalFile))) {
-                    
                     writer.write("====================================================================="); writer.newLine();
-                    writer.write("                  ATTENDANCE REPORT"); writer.newLine();
+                    writer.write("                  ATTENDANCE REPORT (DATE RANGE)"); writer.newLine();
                     writer.write("====================================================================="); writer.newLine();
                     writer.write("Subject: " + teacher.getSubject()); writer.newLine();
                     writer.write("Teacher: " + teacher.getUsername()); writer.newLine();
-                    writer.write("Date Generated: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))); writer.newLine();
+                    writer.write("Period:  " + finalStart + "  TO  " + finalEnd); writer.newLine();
+                    writer.write("Generated: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))); writer.newLine();
                     writer.write("====================================================================="); writer.newLine(); writer.newLine();
                     
-                    writer.write(String.format("%-10s %-25s %-15s", "ID", "Student Name", "Percentage")); writer.newLine();
-                    writer.write("----------------------------------------------------------"); writer.newLine();
+                    writer.write(String.format("%-15s %-12s %-20s %-10s", "Date", "Student ID", "Subject", "Status")); writer.newLine();
+                    writer.write("---------------------------------------------------------------------"); writer.newLine();
                     
-                    for (Student s : students) {
-                        double percentage = attendanceRepo.getAttendancePercentage(s.getId(), teacher.getSubject());
-                        writer.write(String.format("%-10s %-25s %-15s", 
-                            s.getId(), 
-                            s.getName(), 
-                            df.format(percentage) + "%"
+                    int presentCount = 0;
+                    
+                    for (AttendanceRecord r : records) {
+                        if(r.isPresent()) presentCount++;
+                        writer.write(String.format("%-15s %-12s %-20s %-10s", 
+                            r.getDate().toString(), 
+                            r.getStudentId(), 
+                            r.getSubject(), 
+                            r.isPresent() ? "Present" : "Absent"
                         ));
                         writer.newLine();
                     }
                     
                     writer.newLine();
+                    writer.write("---------------------------------------------------------------------"); writer.newLine();
+                    writer.write("SUMMARY:"); writer.newLine();
+                    writer.write("Total Records: " + records.size()); writer.newLine();
+                    writer.write("Total Present: " + presentCount); writer.newLine();
+                    writer.write("Total Absent:  " + (records.size() - presentCount)); writer.newLine();
                     writer.write("=====================================================================");
-                    writer.write("\nEnd of Report");
                     
                     SwingUtilities.invokeLater(() -> {
                         setCursor(Cursor.getDefaultCursor()); 
-                        JOptionPane.showMessageDialog(TeacherDashboardFrame.this, 
-                            "Report saved successfully to:\n" + finalFile.getAbsolutePath(), 
-                            "Success", JOptionPane.INFORMATION_MESSAGE);
+                        JOptionPane.showMessageDialog(TeacherDashboardFrame.this, "Report saved successfully to:\n" + finalFile.getAbsolutePath(), "Success", JOptionPane.INFORMATION_MESSAGE);
                     });
-
                 } catch (IOException ex) {
                     ex.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
                         setCursor(Cursor.getDefaultCursor());
-                        JOptionPane.showMessageDialog(TeacherDashboardFrame.this, 
-                            "Error saving file: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(TeacherDashboardFrame.this, "Error saving file: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                     });
                 }
             }).start(); 
@@ -458,7 +504,6 @@ public class TeacherDashboardFrame extends JFrame {
         table.setSelectionForeground(Color.WHITE);
     }
     
-    // --- Data Loaders ---
     private List<Student> getStudentsForClass() {
         String teacherSubject = teacher.getSubject();
         return studentRepo.getAll().stream()

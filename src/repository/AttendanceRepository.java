@@ -1,82 +1,125 @@
 package repository;
 
 import model.AttendanceRecord;
+import java.sql.*;
 import java.util.*;
-import java.io.*;
 import java.time.LocalDate;
-import java.util.stream.Collectors;
 
 public class AttendanceRepository {
-    private List<AttendanceRecord> records = new ArrayList<>();
-    private static final String FILE_PATH = "attendance.ser"; 
 
-    public AttendanceRepository() {
-        loadFromFile();
-        if (records.isEmpty()) {
-            // Dummy data for initial testing
-            records.add(new AttendanceRecord("S001", "Science", LocalDate.now().minusDays(3), true));
-            records.add(new AttendanceRecord("S001", "Science", LocalDate.now().minusDays(2), true));
-            records.add(new AttendanceRecord("S001", "Science", LocalDate.now().minusDays(1), false)); 
-            saveToFile();
+    public void addRecord(AttendanceRecord record) {
+        if (recordExists(record.getStudentId(), record.getSubject(), record.getDate())) {
+            return;
+        }
+
+        String sql = "INSERT INTO Attendance (student_id, subject, date, is_present) VALUES (?, ?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, record.getStudentId());
+            stmt.setString(2, record.getSubject());
+            stmt.setDate(3, java.sql.Date.valueOf(record.getDate()));
+            stmt.setBoolean(4, record.isPresent());
+            stmt.executeUpdate();
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
     
-    // Adds a new attendance record and saves to file
-    public void addRecord(AttendanceRecord record) {
-        // Prevent duplicate records for the same student on the same day
-        boolean exists = records.stream().anyMatch(r -> 
-            r.getStudentId().equals(record.getStudentId()) && 
-            r.getDate().equals(record.getDate()) &&
-            r.getSubject().equals(record.getSubject())
-        );
-        if (!exists) {
-            records.add(record);
-            saveToFile();
+    private boolean recordExists(String studentId, String subject, LocalDate date) {
+        String sql = "SELECT COUNT(*) FROM Attendance WHERE student_id=? AND subject=? AND date=?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, studentId);
+            stmt.setString(2, subject);
+            stmt.setDate(3, java.sql.Date.valueOf(date));
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
+        return false;
     }
 
     public List<AttendanceRecord> getAllRecords() {
-        return records;
+        List<AttendanceRecord> list = new ArrayList<>();
+        String sql = "SELECT * FROM Attendance";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            while (rs.next()) {
+                list.add(new AttendanceRecord(
+                    rs.getString("student_id"),
+                    rs.getString("subject"),
+                    rs.getDate("date").toLocalDate(),
+                    rs.getBoolean("is_present")
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
     }
     
-    // Calculates the attendance percentage for a specific student in a specific subject
+    // --- NEW METHOD: Get Records by Date Range ---
+    public List<AttendanceRecord> getRecordsByDateRange(String subject, LocalDate fromDate, LocalDate toDate) {
+        List<AttendanceRecord> list = new ArrayList<>();
+        // SQL Query to filter by date
+        String sql = "SELECT * FROM Attendance WHERE subject = ? AND date >= ? AND date <= ? ORDER BY date ASC";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, subject);
+            stmt.setDate(2, java.sql.Date.valueOf(fromDate));
+            stmt.setDate(3, java.sql.Date.valueOf(toDate));
+            
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                list.add(new AttendanceRecord(
+                    rs.getString("student_id"),
+                    rs.getString("subject"),
+                    rs.getDate("date").toLocalDate(),
+                    rs.getBoolean("is_present")
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
     public double getAttendancePercentage(String studentId, String subject) {
-        List<AttendanceRecord> studentRecords = records.stream()
-                .filter(r -> r.getStudentId().equals(studentId) && r.getSubject().equalsIgnoreCase(subject))
-                .collect(Collectors.toList());
-
-        if (studentRecords.isEmpty()) return 0.0;
-
-        long totalClasses = studentRecords.size();
-        long classesPresent = studentRecords.stream().filter(AttendanceRecord::isPresent).count();
-
-        return (double) classesPresent / totalClasses * 100.0;
-    }
-    
-    // --- Persistence Implementation ---
-
-    @SuppressWarnings("unchecked") 
-    private void loadFromFile() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_PATH))) {
-            records = (List<AttendanceRecord>) ois.readObject();
-            System.out.println("Attendance data loaded from " + FILE_PATH);
-        } catch (FileNotFoundException e) {
-            System.out.println("Attendance data file not found. Starting fresh.");
-            records = new ArrayList<>();
-        } catch (IOException | ClassNotFoundException e) {
+        String sqlTotal = "SELECT COUNT(*) FROM Attendance WHERE student_id=? AND subject=?";
+        String sqlPresent = "SELECT COUNT(*) FROM Attendance WHERE student_id=? AND subject=? AND is_present=1";
+        
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            long total = 0;
+            try (PreparedStatement stmt = conn.prepareStatement(sqlTotal)) {
+                stmt.setString(1, studentId);
+                stmt.setString(2, subject);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) total = rs.getLong(1);
+            }
+            
+            if (total == 0) return 0.0;
+            
+            long present = 0;
+            try (PreparedStatement stmt = conn.prepareStatement(sqlPresent)) {
+                stmt.setString(1, studentId);
+                stmt.setString(2, subject);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) present = rs.getLong(1);
+            }
+            return (double) present / total * 100.0;
+        } catch (SQLException e) {
             e.printStackTrace();
-            System.err.println("Error loading attendance data. Starting fresh.");
-            records = new ArrayList<>(); 
         }
-    }
-
-    private void saveToFile() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_PATH))) {
-            oos.writeObject(records);
-            System.out.println("Attendance data saved to " + FILE_PATH);
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.err.println("Error saving attendance data.");
-        }
+        return 0.0;
     }
 }

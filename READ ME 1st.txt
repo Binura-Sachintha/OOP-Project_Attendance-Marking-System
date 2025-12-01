@@ -1,0 +1,12 @@
+Before you run the main.java make sure to follow below steps
+
+1-Open Sql Server Configuration Manager
+2-Double click on Sql Server Netowrk Configuration
+3-Double click on Protocols for MSSQLSERVER
+4-Right click on TCP/IP and Enable it
+5-Then double click on Sql Server Services
+6-Right click on SQL SERVER(MSSQLSERVER) 
+7-Press Restart
+
+After above steps-
+Open the Sql Server Management Studio and run the sql query inside database folder 
